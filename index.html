@@ -203,7 +203,7 @@
     <p class="sub">Masukkan nama Anda untuk masuk.</p>
     <form id="loginForm">
       <label for="loginName">Nama</label>
-      <input type="text" id="loginName" autocomplete="off" placeholder="cth. Bela">
+      <input type="text" id="loginName" autocomplete="off">
       <div class="login-err" id="loginErr"></div>
       <button type="submit" id="loginSubmitBtn" class="primary">Masuk</button>
     </form>
@@ -382,7 +382,7 @@
     </div>
   </section>
 
-  <!-- LOGIN LOG (admin only) -->
+  <!-- LOG LOGIN (admin only) -->
   <section class="panel admin-only">
     <p class="panel-title">
       Log Login
@@ -393,6 +393,23 @@
       <table>
         <thead><tr><th>Waktu</th><th>Nama</th><th>Role</th></tr></thead>
         <tbody id="logBody"><tr class="empty-row"><td colspan="3">Belum dimuat.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- LOG PENGHAPUSAN (admin only) -->
+  <section class="panel admin-only">
+    <p class="panel-title">
+      Log Penghapusan
+      <button type="button" class="small" id="toggleDelLogBtn">Tampilkan</button>
+    </p>
+    <p class="panel-hint">Catatan baris penerimaan yang pernah dihapus, beserta siapa yang menghapus.</p>
+    <div class="table-scroll" id="delLogWrap" style="display:none;">
+      <table>
+        <thead>
+          <tr><th>Dihapus pada</th><th>Dihapus oleh</th><th>Tanggal</th><th>No. SJ</th><th>Supplier</th><th>Barang</th><th>Qty</th><th>Dicatat oleh</th></tr>
+        </thead>
+        <tbody id="delLogBody"><tr class="empty-row"><td colspan="8">Belum dimuat.</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -501,6 +518,13 @@
 
   const sbInsertLoginLog = (name, role) => sb('login_log', { method:'POST', body: JSON.stringify([{ name, role }]) });
   const sbSelectLoginLog = () => sb('login_log?select=*&order=logged_in_at.desc&limit=200');
+
+  const sbInsertDeleteLog = (row, deletedBy) => sb('deleted_records_log', { method:'POST', body: JSON.stringify([{
+    original_id: row.id, tanggal: row.tanggal, no_sj: row.no_sj, supplier: row.supplier, barang: row.barang,
+    qty: row.qty, kemasan: row.kemasan, no_po: row.no_po, no_pol: row.no_pol, sopir: row.sopir,
+    recorded_by: row.recorded_by, deleted_by: deletedBy
+  }]) });
+  const sbSelectDeleteLog = () => sb('deleted_records_log?select=*&order=deleted_at.desc&limit=200');
 
   // ---------- USERS ----------
   const USERS = {
@@ -663,6 +687,41 @@
         renderLog(list);
       }catch(err){
         showToast('Gagal memuat log login: ' + err.message, 'error');
+      }
+    }
+    wrap.style.display = willShow ? 'block' : 'none';
+    this.textContent = willShow ? 'Sembunyikan' : 'Tampilkan';
+  });
+
+  function renderDeleteLog(list){
+    const body = el('delLogBody');
+    if(!list || list.length === 0){
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">Belum ada log.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(l=>`
+      <tr>
+        <td class="mono">${fmtDateTime(l.deleted_at)}</td>
+        <td>${escapeHtml(l.deleted_by)}</td>
+        <td class="mono">${fmtDate(l.tanggal)}</td>
+        <td class="mono">${escapeHtml(l.no_sj || '-')}</td>
+        <td>${escapeHtml(l.supplier || '-')}</td>
+        <td>${escapeHtml(l.barang || '-')}</td>
+        <td class="mono">${l.qty != null ? l.qty : '-'}</td>
+        <td>${escapeHtml(l.recorded_by || '-')}</td>
+      </tr>`).join('');
+  }
+
+  el('toggleDelLogBtn').addEventListener('click', async function(){
+    const wrap = el('delLogWrap');
+    const willShow = wrap.style.display === 'none';
+    if(willShow){
+      this.textContent = 'Memuat...';
+      try{
+        const list = await sbSelectDeleteLog();
+        renderDeleteLog(list);
+      }catch(err){
+        showToast('Gagal memuat log penghapusan: ' + err.message, 'error');
       }
     }
     wrap.style.display = willShow ? 'block' : 'none';
@@ -1062,7 +1121,7 @@
         <td class="mono" style="font-size:11.5px;">${r.edited_by ? escapeHtml(r.edited_by) + ' · ' + fmtDateTime(r.edited_at) : '-'}</td>
         <td>
           <button type="button" class="ghost editor-only" data-edit="${r.id}" title="Ubah">✎</button>
-          <button type="button" class="ghost admin-only" data-del="${r.id}" title="Hapus">✕</button>
+          <button type="button" class="ghost editor-only" data-del="${r.id}" title="Hapus">✕</button>
         </td>
       </tr>
     `).join('');
@@ -1070,8 +1129,12 @@
     body.querySelectorAll('[data-del]').forEach(btn=>{
       btn.addEventListener('click', async function(){
         const id = this.getAttribute('data-del');
+        const rec = records.find(r => String(r.id) === String(id));
         if(!confirm('Hapus baris penerimaan ini?')) return;
         try{
+          if(rec){
+            await sbInsertDeleteLog(rec, currentUser ? currentUser.name : '-').catch(()=>{ /* non-kritis, tetap lanjut hapus */ });
+          }
           await sbDeleteRecord(id);
           records = records.filter(r => String(r.id) !== String(id));
           renderHistory();
