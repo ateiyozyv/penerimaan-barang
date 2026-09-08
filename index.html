@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formulir Penerimaan Barang</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#20302c;
+    --ink-soft:#5b6d67;
+    --paper:#f4f6f3;
+    --panel:#ffffff;
+    --line:#d7ddd8;
+    --line-strong:#a9b6b0;
+    --accent:#2f6f5a;
+    --accent-dark:#20503f;
+    --accent-soft:#e4efe9;
+    --amber:#b5762a;
+    --amber-soft:#f7ecdc;
+    --danger:#a3402f;
+    --danger-soft:#f6e4e0;
+    --radius:3px;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ font-family:var(--sans); background:var(--paper); color:var(--ink); line-height:1.45; }
+
+  body[data-role="gudang"] .admin-only,
+  body[data-role="kantor"] .admin-only{ display:none !important; }
+  body:not([data-role]) .app-content{ display:none; }
+
+  #loginScreen{
+    position:fixed; inset:0; background:var(--ink);
+    display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;
+  }
+  #loginScreen.hidden{ display:none; }
+  .login-card{ background:var(--panel); border-radius:var(--radius); padding:36px 32px; width:100%; max-width:340px; }
+  .login-card h1{ font-size:19px; margin:0 0 4px; }
+  .login-card p.sub{ font-size:12.5px; color:var(--ink-soft); margin:0 0 24px; }
+  .login-card label{ font-size:12px; font-weight:600; color:var(--ink-soft); display:block; margin-bottom:6px; }
+  .login-card input{
+    font-family:var(--mono); font-size:15px; padding:11px 12px; width:100%;
+    border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--paper); margin-bottom:8px;
+  }
+  .login-card input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .login-card .login-err{ font-size:12.5px; color:var(--danger); min-height:18px; margin-bottom:10px; }
+  .login-card button{ width:100%; padding:11px; font-size:14px; }
+
+  .wrap{ max-width:900px; margin:0 auto; padding:28px 16px 60px; }
+
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:26px; flex-wrap:wrap; gap:10px;
+  }
+  header.top h1{ font-size:21px; font-weight:700; margin:0; }
+  header.top .sub{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); }
+  .user-box{ text-align:right; font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); }
+  .user-box strong{ color:var(--ink); font-size:14px; display:block; }
+  .user-box .role-tag{
+    display:inline-block; margin-top:2px; font-size:10px; letter-spacing:.02em;
+    background:var(--accent-soft); color:var(--accent-dark); padding:1px 7px; border-radius:2px;
+  }
+  .user-box button.logout{ margin-top:8px; padding:5px 10px; font-size:11.5px; }
+  .clock{ font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); margin-top:4px; }
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:24px; margin-bottom:18px; }
+  .panel-title{ font-size:13px; font-weight:600; color:var(--ink); margin:0 0 4px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-hint{ font-size:12.5px; color:var(--ink-soft); margin:0 0 18px; }
+
+  button{
+    font-family:var(--sans); font-size:13.5px; font-weight:600; cursor:pointer;
+    border-radius:var(--radius); border:1px solid var(--line-strong); background:var(--panel); color:var(--ink);
+    padding:9px 14px; transition:background .12s ease, border-color .12s ease;
+  }
+  button:hover{ border-color:var(--ink); }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover{ background:var(--accent-dark); border-color:var(--accent-dark); }
+  button.ghost{ background:transparent; border-color:transparent; color:var(--ink-soft); padding:6px 8px; font-size:12px; }
+  button.ghost:hover{ color:var(--danger); background:transparent; border-color:transparent; }
+  button.small{ padding:6px 10px; font-size:12px; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+
+  form#receiveForm{ display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field.full{ grid-column:1 / -1; }
+  .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); display:flex; gap:6px; align-items:center; }
+  .field label .opt-tag{
+    font-family:var(--mono); font-size:10px; font-weight:500; color:var(--amber);
+    background:var(--amber-soft); padding:1px 6px; border-radius:2px;
+  }
+  input[type="text"], input[type="number"], input[type="date"], input[type="month"], select{
+    font-family:var(--mono); font-size:14.5px; color:var(--ink); background:var(--paper);
+    border:1px solid var(--line-strong); border-radius:var(--radius); padding:10px 11px; width:100%;
+  }
+  input:focus, select:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  select:disabled, input:disabled{ background:#eceeec; color:#9aa5a0; cursor:not-allowed; }
+  .field small.err{ font-family:var(--sans); font-size:11.5px; color:var(--danger); display:none; }
+  .field.invalid input, .field.invalid select{ border-color:var(--danger); }
+  .field.invalid small.err{ display:block; }
+
+  .form-actions{
+    grid-column:1 / -1; display:flex; justify-content:flex-end; align-items:center; gap:12px;
+    margin-top:6px; padding-top:16px; border-top:1px solid var(--line);
+  }
+  #saveStatus{ font-family:var(--mono); font-size:12px; margin-right:auto; }
+  #saveStatus.ok{ color:var(--accent-dark); }
+  #saveStatus.fail{ color:var(--danger); }
+  #saveStatus.pending{ color:var(--ink-soft); }
+
+  .toast{
+    font-family:var(--mono); font-size:12.5px; padding:10px 12px; border-radius:var(--radius);
+    margin-bottom:16px; display:none;
+  }
+  .toast.show{ display:block; }
+  .toast.success{ background:var(--accent-soft); color:var(--accent-dark); border:1px solid var(--accent); }
+  .toast.error{ background:var(--danger-soft); color:var(--danger); border:1px solid var(--danger); }
+
+  .filter-bar{
+    display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;
+    margin-bottom:14px; padding-bottom:18px; border-bottom:1px solid var(--line);
+  }
+  .filter-bar .field{ gap:6px; }
+  .filter-bar label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
+  .filter-bar input[type="date"]{ width:auto; min-width:150px; }
+  .filter-summary{ font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); margin-bottom:12px; }
+  .filter-summary b{ color:var(--accent-dark); }
+
+  .month-export{
+    display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;
+    margin-top:18px; padding-top:18px; border-top:1px solid var(--line);
+  }
+  .month-export .field{ gap:6px; }
+  .month-export input[type="month"]{ width:auto; min-width:150px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--ink-soft); text-align:left; padding:8px 10px; border-bottom:2px solid var(--ink); white-space:nowrap;
+  }
+  tbody td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:hover{ background:var(--accent-soft); }
+  .empty-row td{ text-align:center; color:var(--ink-soft); padding:28px 10px; font-style:italic; }
+  .table-scroll{ overflow-x:auto; }
+  .mono{ font-family:var(--mono); }
+  .row-no{ color:var(--ink-soft); font-family:var(--mono); }
+
+  .supplier-manage{ margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--line); }
+  .supplier-manage .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .supplier-manage .field{ flex:1; min-width:160px; gap:6px; }
+
+  .supplier-list{ display:flex; flex-direction:column; gap:10px; }
+  .supplier-block{ border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; }
+  .supplier-block .sb-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .supplier-block .sb-head strong{ font-size:13.5px; }
+  .supplier-block .sb-actions{ display:flex; gap:4px; }
+  .item-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--paper); border:1px solid var(--line);
+    border-radius:2px; padding:4px 8px; margin:3px 5px 3px 0; font-family:var(--mono); font-size:12px;
+  }
+  .item-chip button{ border:none; background:none; padding:0; color:var(--ink-soft); font-size:12px; cursor:pointer; }
+  .item-chip button:hover{ color:var(--danger); }
+
+  footer.note{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:30px; }
+
+  @media (max-width:640px){
+    form#receiveForm{ grid-template-columns:1fr; }
+    header.top{ flex-direction:column; align-items:flex-start; }
+    .user-box{ text-align:left; }
+    .filter-bar, .month-export{ flex-direction:column; align-items:stretch; }
+    .form-actions{ flex-wrap:wrap; }
+    #saveStatus{ width:100%; margin-right:0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>Formulir Penerimaan Barang</h1>
+    <p class="sub">Masukkan nama Anda untuk masuk.</p>
+    <form id="loginForm">
+      <label for="loginName">Nama</label>
+      <input type="text" id="loginName" autocomplete="off" placeholder="cth. Bela">
+      <div class="login-err" id="loginErr"></div>
+      <button type="submit" id="loginSubmitBtn" class="primary">Masuk</button>
+    </form>
+  </div>
+</div>
+
+<div class="wrap app-content">
+
+  <header class="top">
+    <div>
+      <h1>Formulir Penerimaan Barang</h1>
+      <div class="sub">Pencatatan barang masuk gudang</div>
+      <div class="clock"><span id="clockDate">-</span> · <span id="clockTime">--:--</span></div>
+    </div>
+    <div class="user-box">
+      <strong id="userName">-</strong>
+      <span class="role-tag" id="userRole">-</span>
+      <div><button type="button" class="logout" id="logoutBtn">Keluar</button></div>
+    </div>
+  </header>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- DATA SUPPLIER/BARANG (khusus admin, disembunyikan secara default) -->
+  <section class="panel admin-only">
+    <p class="panel-title">
+      Data Supplier &amp; Barang
+      <button type="button" class="small" id="toggleSupplierBtn">Kelola Data</button>
+    </p>
+    <p class="panel-hint">Supplier terdaftar: <b id="supplierCount">0</b> · Total barang: <b id="rowCount">0</b>. Pilihan supplier &amp; barang tetap muncul seperti biasa di formulir input di bawah.</p>
+
+    <div id="supplierManageWrap" style="display:none;">
+      <div class="supplier-manage">
+        <p class="panel-title" style="font-size:12.5px;margin-bottom:10px;">Tambah Barang / Supplier Baru</p>
+        <div class="row">
+          <div class="field">
+            <label for="supplierPicker">Supplier</label>
+            <select id="supplierPicker">
+              <option value="__new__">+ Supplier baru</option>
+            </select>
+          </div>
+          <div class="field" id="newSupplierField">
+            <label for="newSupplierName">Nama supplier baru</label>
+            <input type="text" id="newSupplierName" placeholder="cth. PT. Contoh Jaya">
+          </div>
+          <div class="field">
+            <label for="newItemName">Nama barang</label>
+            <input type="text" id="newItemName" placeholder="cth. Kaolin Powder">
+          </div>
+          <div class="field" style="flex:0;">
+            <button type="button" class="primary" id="addItemBtn">Tambah</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="supplier-list" id="supplierList"></div>
+    </div>
+  </section>
+
+  <!-- FORM PANEL -->
+  <section class="panel">
+    <p class="panel-title">Input Penerimaan</p>
+    <p class="panel-hint">Kolom bertanda <span class="opt-tag">opsional</span> boleh dikosongkan.</p>
+
+    <form id="receiveForm" novalidate>
+      <div class="field" id="f_tanggal">
+        <label for="tanggal">Tanggal</label>
+        <input type="date" id="tanggal" required>
+        <small class="err">Tanggal wajib diisi</small>
+      </div>
+
+      <div class="field" id="f_noSJ">
+        <label for="noSJ">No. SJ</label>
+        <input type="text" id="noSJ" placeholder="cth. SJ-0001" required>
+        <small class="err">No. SJ wajib diisi</small>
+      </div>
+
+      <div class="field" id="f_supplier">
+        <label for="supplier">Nama Supplier</label>
+        <select id="supplier" required>
+          <option value="">— pilih supplier —</option>
+        </select>
+        <small class="err">Pilih supplier terlebih dahulu</small>
+      </div>
+
+      <div class="field" id="f_barang">
+        <label for="barang">Nama Barang</label>
+        <select id="barang" required disabled>
+          <option value="">— pilih supplier dahulu —</option>
+        </select>
+        <small class="err">Pilih barang</small>
+      </div>
+
+      <div class="field" id="f_qty">
+        <label for="qty">Quantity (kg)</label>
+        <input type="number" id="qty" min="0" step="0.01" placeholder="0" required>
+        <small class="err">Isi quantity yang valid</small>
+      </div>
+
+      <div class="field" id="f_kemasan">
+        <label for="kemasan">Kemasan</label>
+        <select id="kemasan" required>
+          <option value="">— pilih —</option>
+          <option value="Sak">Sak</option>
+          <option value="Jumbo">Jumbo</option>
+        </select>
+        <small class="err">Pilih jenis kemasan</small>
+      </div>
+
+      <div class="field" id="f_po">
+        <label for="noPO">No. PO</label>
+        <input type="text" id="noPO" placeholder="cth. PO-2026-001" required>
+        <small class="err">No. PO wajib diisi</small>
+      </div>
+
+      <div class="field">
+        <label for="noPol">No. Polisi <span class="opt-tag">opsional</span></label>
+        <input type="text" id="noPol" placeholder="cth. B 1234 XY">
+      </div>
+
+      <div class="field">
+        <label for="sopir">Sopir <span class="opt-tag">opsional</span></label>
+        <input type="text" id="sopir" placeholder="Nama sopir">
+      </div>
+
+      <div class="form-actions">
+        <span id="saveStatus"></span>
+        <button type="reset" id="resetBtn">Bersihkan</button>
+        <button type="submit" class="primary" id="submitBtn">Simpan Penerimaan</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- HISTORY + FILTER PANEL -->
+  <section class="panel">
+    <p class="panel-title">Riwayat Penerimaan</p>
+    <p class="panel-hint">Menampilkan 30 hari terakhir. Untuk data lebih lama, gunakan Ekspor ke File Excel per Bulan di bawah.</p>
+
+    <div class="filter-bar">
+      <div class="field">
+        <label for="filterFrom">Dari tanggal</label>
+        <input type="date" id="filterFrom">
+      </div>
+      <div class="field">
+        <label for="filterTo">Sampai tanggal</label>
+        <input type="date" id="filterTo">
+      </div>
+      <button type="button" id="applyFilterBtn">Tampilkan</button>
+      <button type="button" id="refreshBtn">Muat Ulang</button>
+      <button type="button" class="primary" id="exportBtn" style="margin-left:auto;">Ekspor ke File Excel (Tampilan Ini)</button>
+    </div>
+
+    <p class="filter-summary" id="filterSummary">Memuat data...</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th><th>Tanggal</th><th>No. SJ</th><th>Supplier</th><th>Barang</th>
+            <th>Qty (kg)</th><th>Kemasan</th><th>No. PO</th><th>No. Pol</th><th>Sopir</th>
+            <th>Dicatat oleh</th><th class="admin-only"></th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr class="empty-row"><td colspan="12">Memuat data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="month-export">
+      <div class="field">
+        <label for="monthPicker">Ekspor ke File Excel per Bulan</label>
+        <input type="month" id="monthPicker">
+      </div>
+      <button type="button" id="exportMonthBtn">Ekspor ke File Excel (Bulan Ini)</button>
+    </div>
+  </section>
+
+  <!-- LOGIN LOG (admin only) -->
+  <section class="panel admin-only">
+    <p class="panel-title">
+      Log Login
+      <button type="button" class="small" id="toggleLogBtn">Tampilkan</button>
+    </p>
+    <p class="panel-hint">Riwayat siapa saja yang masuk ke aplikasi ini.</p>
+    <div class="table-scroll" id="logWrap" style="display:none;">
+      <table>
+        <thead><tr><th>Waktu</th><th>Nama</th><th>Role</th></tr></thead>
+        <tbody id="logBody"><tr class="empty-row"><td colspan="3">Belum dimuat.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="note">Data tersimpan di database bersama — dapat diakses Bela, Sandra, Dedi, Dewi, Gita, dan Keke.</footer>
+</div>
+
+<script>
+(function(){
+  // ---------- KONFIGURASI SUPABASE ----------
+  const SB_URL = 'https://niestuhyafjdrwdzxhnt.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pZXN0dWh5YWZqZHJ3ZHp4aG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDQ2NTMsImV4cCI6MjEwNDQyMDY1M30.mrI4DWHI39U0m86M1oEXLZ2E5sG7K7IAz66VUVn_ekg';
+
+  async function sb(path, options){
+    options = options || {};
+    const headers = Object.assign({
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json'
+    }, options.headers || {});
+    let res;
+    try{
+      res = await fetch(SB_URL + '/rest/v1/' + path, Object.assign({}, options, { headers }));
+    }catch(networkErr){
+      throw new Error('Tidak bisa terhubung ke server (cek koneksi internet).');
+    }
+    if(!res.ok){
+      let msg = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.message) msg = j.message; }catch(e){}
+      throw new Error(msg);
+    }
+    if(res.status === 204) return null;
+    try{ return await res.json(); }catch(e){ return null; }
+  }
+
+  const sbSelectSupplierItems = () => sb('supplier_items?select=id,supplier_name,item_name&order=supplier_name.asc,item_name.asc');
+  const sbInsertSupplierItems = (rows) => sb('supplier_items', { method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify(rows) });
+  const sbDeleteSupplierItem = (id) => sb('supplier_items?id=eq.' + encodeURIComponent(id), { method:'DELETE' });
+  const sbRenameSupplier = (oldName, newName) => sb('supplier_items?supplier_name=eq.' + encodeURIComponent(oldName), { method:'PATCH', body: JSON.stringify({ supplier_name:newName }) });
+  const sbDeleteSupplierAll = (name) => sb('supplier_items?supplier_name=eq.' + encodeURIComponent(name), { method:'DELETE' });
+
+  const sbSelectRecordsWindowed = (cutoff) => sb('receiving_records?tanggal=gte.' + cutoff + '&select=*&order=tanggal.desc,created_at.desc');
+  const sbSelectRecordsByRange = (start, end) => sb('receiving_records?tanggal=gte.' + start + '&tanggal=lte.' + end + '&select=*&order=tanggal.desc,created_at.desc');
+  const sbInsertRecord = (row) => sb('receiving_records', { method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify([row]) });
+  const sbDeleteRecord = (id) => sb('receiving_records?id=eq.' + encodeURIComponent(id), { method:'DELETE' });
+
+  const sbInsertLoginLog = (name, role) => sb('login_log', { method:'POST', body: JSON.stringify([{ name, role }]) });
+  const sbSelectLoginLog = () => sb('login_log?select=*&order=logged_in_at.desc&limit=200');
+
+  // ---------- USERS ----------
+  const USERS = {
+    'bela':  { name:'Bela',  role:'admin'  },
+    'sandra':{ name:'Sandra',role:'gudang' },
+    'dedi':  { name:'Dedi',  role:'gudang' },
+    'dewi':  { name:'Dewi',  role:'kantor' },
+    'gita':  { name:'Gita',  role:'kantor' },
+    'keke':  { name:'Keke',  role:'kantor' }
+  };
+  const ROLE_LABEL = { admin:'Admin', gudang:'Gudang', kantor:'Kantor' };
+
+  let currentUser = null;
+
+  const DEFAULT_SUPPLIER_DATA = {
+    "PT. Jayatama Mineralindo": ["CMC Finfix L40S", "Kaolin Powder 325 Mesh"],
+    "PT. Halim Sakti Pratama": ["Alumina A-10X", "Sodium Feldspar", "Barium Sulphate CS-70A", "Aluminium Hydroxide H-32", "Barium Carbonate ex RRC", "Potassium Feldspar"],
+    "PT. Colorobbia Indonesia": ["RM-1133M", "Stain Black PG54010", "Raw Material Waste", "RM1222 - Raw Material Frit Mix", "SE-72/002 Powder Frit FTR122", "SE-72/003 Powder Frit FD13605/75", "SE-72/004 Powder Frit FT126", "TTF1132 Turquoise Pigment", "TTF1138 - Maroon Pigment", "TTF1160 Yellow Pigment", "WASTE POWDER", "Wollastonite", "Zircobit MO/S"],
+    "PT. Hadiputra Jaya": ["Talc Haichen (HCP30)"],
+    "CV. Kurnia Jaya": ["Soda Ash Dense Ex. USA"],
+    "PT. Lautan Warna Sari": ["Floura Binder MV N2 A"],
+    "PT. Alfa Lautan Biru": ["CAUSTIC SODA RRT @ 25 KG", "H2O2 KOREA @30 Kg"],
+    "PT. Arthafajar Mitrasejati": ["Alumina Oxide VA-01"],
+    "PT. Atres Pro Sintesa": ["STPP"],
+    "PT. Borneo Alumina Indonesia": ["Aluminium Oxide - AL2O3 (AM-01)"],
+    "PT. Bumi Mas Adijaya": ["Kaolin Powder"],
+    "PT. Cikal Jaya Permai": ["Kraft Woven Bag Coklat Polos", "Kraft Woven Bag Coklat Printing", "Kraft Woven Bag Putih Polos"],
+    "PT. Dian Lestari Sejahtera": ["Ball Clay Noodle"],
+    "PT. Galatta Lestarindo": ["Dolomite 325 Mesh"],
+    "PT. Gimpex PVT LTd": ["Potassium Feldspar"],
+    "PT. Indokemika Jayatama": ["STPP"],
+    "PT. Justus Kimiaraya": ["STPP"],
+    "PT. Kurnia Artha Pratiwi": ["CaCO3 B 400 @ 50 Kg"],
+    "PT. Monokem Surya": ["Zirconium Silicate MC-256"],
+    "PT. RaoDee Cahaya Gemilang": ["Jumbo Bag"],
+    "PT. Sibelco Lautan Minerals": ["Silica SC2"],
+    "PT. Trimitra Cikarang": ["Plastik Wrap, 500x1000x20um"],
+    "Manmohan Minerals & Chemicals": ["Manganese Oxide"],
+    "SHJQ Chemical Technology": ["Alumina Calcined H-08L", "Alumina Calcined SA", "Alumina Calcined FRA-70", "Alumina Calcined AC-1", "Alumina Calcined AC-1G"],
+    "Vardhman Minerals": ["Sodium Feldspar", "Potassium Feldspar"],
+    "Gujarat Credo Alumina Chemicals": ["Aluminium Hydroxide MH 01D"],
+    "Bpk. Untung": ["Ampul"]
+  };
+
+  let supplierData = {};   // { supplierName: [{id, name}] }
+  let records = [];        // windowed (30 hari) records from DB, snake_case fields
+  let filterFrom = '';
+  let filterTo = '';
+
+  const el = (id) => document.getElementById(id);
+  const supplierSelect = el('supplier');
+  const barangSelect = el('barang');
+  const form = el('receiveForm');
+  const toast = el('toast');
+
+  function showToast(msg, type){
+    toast.textContent = msg;
+    toast.className = 'toast show ' + (type || 'success');
+    setTimeout(()=>{ toast.classList.remove('show'); }, 3800);
+  }
+
+  function todayISO(){
+    const now = new Date();
+    const off = now.getTimezoneOffset();
+    const local = new Date(now.getTime() - off*60000);
+    return local.toISOString().slice(0,10);
+  }
+  function daysAgoISO(n){
+    const now = new Date();
+    now.setDate(now.getDate() - n);
+    const off = now.getTimezoneOffset();
+    const local = new Date(now.getTime() - off*60000);
+    return local.toISOString().slice(0,10);
+  }
+  function fmtDate(iso){
+    if(!iso) return '-';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  function tickClock(){
+    const now = new Date();
+    el('clockTime').textContent = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    el('clockDate').textContent = now.toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  }
+
+  // ---------- ERROR VISIBILITY DI LAYAR LOGIN ----------
+  window.addEventListener('error', function(ev){
+    const box = el('loginErr');
+    if(box && !el('loginScreen').classList.contains('hidden')){
+      box.textContent = 'Error: ' + (ev.message || 'terjadi kesalahan tak dikenal');
+    }
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    const box = el('loginErr');
+    if(box && !el('loginScreen').classList.contains('hidden')){
+      box.textContent = 'Error: ' + (ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason));
+    }
+  });
+
+  // ---------- LOGIN ----------
+  function doLogin(){
+    const raw = el('loginName').value.trim();
+    const key = raw.toLowerCase();
+    const found = USERS[key];
+    if(!found){
+      el('loginErr').textContent = raw ? 'Nama tidak dikenali. Cek kembali penulisan nama Anda.' : 'Nama harus diisi.';
+      return;
+    }
+    el('loginErr').textContent = '';
+    currentUser = found;
+    document.body.setAttribute('data-role', currentUser.role);
+    el('userName').textContent = currentUser.name;
+    el('userRole').textContent = ROLE_LABEL[currentUser.role];
+    el('loginScreen').classList.add('hidden');
+
+    sbInsertLoginLog(currentUser.name, currentUser.role).catch(()=>{ /* non-kritis */ });
+
+    initApp().catch(function(err){
+      showToast('Gagal memuat sebagian data: ' + (err && err.message ? err.message : err), 'error');
+    });
+  }
+
+  el('loginForm').addEventListener('submit', function(e){ e.preventDefault(); doLogin(); });
+  el('loginSubmitBtn').addEventListener('click', function(e){ e.preventDefault(); doLogin(); });
+  el('loginName').addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); doLogin(); } });
+
+  el('logoutBtn').addEventListener('click', function(){
+    currentUser = null;
+    document.body.removeAttribute('data-role');
+    el('loginScreen').classList.remove('hidden');
+    el('loginName').value = '';
+    el('loginErr').textContent = '';
+  });
+
+  // ---------- LOG LOGIN (admin) ----------
+  function renderLog(list){
+    const body = el('logBody');
+    if(!list || list.length === 0){
+      body.innerHTML = '<tr class="empty-row"><td colspan="3">Belum ada log.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(l=>{
+      const t = new Date(l.logged_in_at);
+      const timeStr = isNaN(t) ? l.logged_in_at : t.toLocaleString('id-ID');
+      return `<tr><td class="mono">${timeStr}</td><td>${escapeHtml(l.name)}</td><td>${ROLE_LABEL[l.role]||l.role}</td></tr>`;
+    }).join('');
+  }
+
+  el('toggleLogBtn').addEventListener('click', async function(){
+    const wrap = el('logWrap');
+    const willShow = wrap.style.display === 'none';
+    if(willShow){
+      this.textContent = 'Memuat...';
+      try{
+        const list = await sbSelectLoginLog();
+        renderLog(list);
+      }catch(err){
+        showToast('Gagal memuat log login: ' + err.message, 'error');
+      }
+    }
+    wrap.style.display = willShow ? 'block' : 'none';
+    this.textContent = willShow ? 'Sembunyikan' : 'Tampilkan';
+  });
+
+  // ---------- APP INIT ----------
+  let appInitialized = false;
+  async function initApp(){
+    tickClock();
+    if(!appInitialized){ setInterval(tickClock, 1000); appInitialized = true; }
+    el('tanggal').value = todayISO();
+
+    const minDate = daysAgoISO(29);
+    const maxDate = todayISO();
+    el('filterFrom').min = minDate; el('filterFrom').max = maxDate;
+    el('filterTo').min = minDate; el('filterTo').max = maxDate;
+    el('monthPicker').value = todayISO().slice(0,7);
+
+    el('filterSummary').textContent = 'Memuat data...';
+    el('historyBody').innerHTML = '<tr class="empty-row"><td colspan="12">Memuat data...</td></tr>';
+
+    await loadSupplierData();
+    await loadWindowedRecords();
+
+    renderSupplierOptions();
+    renderSupplierManageList();
+    renderHistory();
+  }
+
+  // ---------- SUPPLIER DATA ----------
+  async function loadSupplierData(){
+    let rows;
+    try{
+      rows = await sbSelectSupplierItems();
+    }catch(err){
+      showToast('Gagal memuat data supplier: ' + err.message, 'error');
+      rows = [];
+    }
+    if(rows && rows.length === 0){
+      // seed data awal sekali saja
+      const seedRows = [];
+      Object.keys(DEFAULT_SUPPLIER_DATA).forEach(s=>{
+        DEFAULT_SUPPLIER_DATA[s].forEach(item=> seedRows.push({ supplier_name:s, item_name:item }));
+      });
+      try{
+        rows = await sbInsertSupplierItems(seedRows);
+      }catch(err){
+        showToast('Gagal mengisi data awal supplier: ' + err.message, 'error');
+        rows = [];
+      }
+    }
+    supplierData = {};
+    (rows || []).forEach(r=>{
+      if(!supplierData[r.supplier_name]) supplierData[r.supplier_name] = [];
+      supplierData[r.supplier_name].push({ id:r.id, name:r.item_name });
+    });
+    updateSupplierCounts();
+  }
+
+  function updateSupplierCounts(){
+    const suppliers = Object.keys(supplierData);
+    let rowCount = 0;
+    suppliers.forEach(s => rowCount += supplierData[s].length);
+    el('supplierCount').textContent = suppliers.length;
+    el('rowCount').textContent = rowCount;
+  }
+
+  function renderSupplierOptions(){
+    const prev = supplierSelect.value;
+    supplierSelect.innerHTML = '<option value="">— pilih supplier —</option>';
+    Object.keys(supplierData).sort((a,b)=>a.localeCompare(b)).forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      supplierSelect.appendChild(opt);
+    });
+    if(Object.keys(supplierData).includes(prev)){
+      supplierSelect.value = prev;
+      renderBarangOptions(prev);
+    }
+
+    const picker = el('supplierPicker');
+    const prevPicker = picker.value;
+    picker.innerHTML = '<option value="__new__">+ Supplier baru</option>';
+    Object.keys(supplierData).sort((a,b)=>a.localeCompare(b)).forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      picker.appendChild(opt);
+    });
+    if(prevPicker) picker.value = prevPicker;
+    toggleNewSupplierField();
+  }
+
+  function renderBarangOptions(supplierName){
+    barangSelect.innerHTML = '';
+    if(!supplierName){
+      barangSelect.innerHTML = '<option value="">— pilih supplier dahulu —</option>';
+      barangSelect.disabled = true;
+      return;
+    }
+    const items = supplierData[supplierName] || [];
+    barangSelect.disabled = false;
+    if(items.length === 0){
+      barangSelect.innerHTML = '<option value="">— tidak ada barang —</option>';
+      barangSelect.disabled = true;
+      return;
+    }
+    barangSelect.innerHTML = '<option value="">— pilih barang —</option>';
+    items.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(it=>{
+      const opt = document.createElement('option');
+      opt.value = it.name; opt.textContent = it.name;
+      barangSelect.appendChild(opt);
+    });
+  }
+
+  supplierSelect.addEventListener('change', (e)=>{
+    renderBarangOptions(e.target.value);
+    clearFieldError('f_barang');
+  });
+
+  // ---------- SUPPLIER MANAGE (admin) ----------
+  el('toggleSupplierBtn').addEventListener('click', function(){
+    const wrap = el('supplierManageWrap');
+    const willShow = wrap.style.display === 'none';
+    wrap.style.display = willShow ? 'block' : 'none';
+    this.textContent = willShow ? 'Sembunyikan' : 'Kelola Data';
+  });
+
+  function toggleNewSupplierField(){
+    const isNew = el('supplierPicker').value === '__new__';
+    el('newSupplierField').style.display = isNew ? 'flex' : 'none';
+  }
+  el('supplierPicker').addEventListener('change', toggleNewSupplierField);
+
+  el('addItemBtn').addEventListener('click', async function(){
+    const picker = el('supplierPicker').value;
+    const isNew = picker === '__new__';
+    const supplierName = isNew ? el('newSupplierName').value.trim() : picker;
+    const itemName = el('newItemName').value.trim();
+
+    if(!supplierName){ showToast('Nama supplier harus diisi.', 'error'); return; }
+    if(!itemName){ showToast('Nama barang harus diisi.', 'error'); return; }
+    if(supplierData[supplierName] && supplierData[supplierName].some(it=>it.name === itemName)){
+      showToast('Barang ini sudah ada untuk supplier tersebut.', 'error');
+      return;
+    }
+
+    this.disabled = true;
+    try{
+      const inserted = await sbInsertSupplierItems([{ supplier_name:supplierName, item_name:itemName }]);
+      const row = inserted && inserted[0];
+      if(!supplierData[supplierName]) supplierData[supplierName] = [];
+      supplierData[supplierName].push({ id: row ? row.id : Date.now(), name:itemName });
+      updateSupplierCounts();
+      renderSupplierOptions();
+      renderSupplierManageList();
+      el('newSupplierName').value = '';
+      el('newItemName').value = '';
+      showToast(`Barang "${itemName}" ditambahkan untuk ${supplierName}.`, 'success');
+    }catch(err){
+      showToast('Gagal menyimpan: ' + err.message, 'error');
+    }
+    this.disabled = false;
+  });
+
+  function renderSupplierManageList(){
+    const wrap = el('supplierList');
+    const names = Object.keys(supplierData).sort((a,b)=>a.localeCompare(b));
+    if(names.length === 0){
+      wrap.innerHTML = '<p class="panel-hint">Belum ada data supplier.</p>';
+      return;
+    }
+    wrap.innerHTML = names.map(s=>{
+      const items = supplierData[s].slice().sort((a,b)=>a.name.localeCompare(b.name));
+      const chips = items.map(it => `
+        <span class="item-chip">${escapeHtml(it.name)}
+          <button type="button" class="admin-only" data-del-item="${it.id}" title="Hapus barang">✕</button>
+        </span>`).join('');
+      return `
+        <div class="supplier-block">
+          <div class="sb-head">
+            <strong>${escapeHtml(s)}</strong>
+            <div class="sb-actions admin-only">
+              <button type="button" class="small" data-rename-supplier="${encodeURIComponent(s)}">Ubah nama</button>
+              <button type="button" class="small" style="color:var(--danger);border-color:var(--danger);" data-del-supplier="${encodeURIComponent(s)}">Hapus supplier</button>
+            </div>
+          </div>
+          <div>${chips || '<span class="panel-hint">Tidak ada barang.</span>'}</div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('[data-del-item]').forEach(btn=>{
+      btn.addEventListener('click', async function(){
+        const id = this.getAttribute('data-del-item');
+        let ownerSupplier = null, itemName = '';
+        Object.keys(supplierData).forEach(s=>{
+          const found = supplierData[s].find(it => String(it.id) === String(id));
+          if(found){ ownerSupplier = s; itemName = found.name; }
+        });
+        if(!confirm(`Hapus barang "${itemName}"?`)) return;
+        try{
+          await sbDeleteSupplierItem(id);
+          supplierData[ownerSupplier] = supplierData[ownerSupplier].filter(it => String(it.id) !== String(id));
+          updateSupplierCounts();
+          renderSupplierOptions();
+          renderSupplierManageList();
+          showToast('Barang dihapus.', 'success');
+        }catch(err){
+          showToast('Gagal menghapus: ' + err.message, 'error');
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-rename-supplier]').forEach(btn=>{
+      btn.addEventListener('click', async function(){
+        const s = decodeURIComponent(this.getAttribute('data-rename-supplier'));
+        const newName = prompt('Ubah nama supplier:', s);
+        if(!newName || !newName.trim() || newName.trim() === s) return;
+        const trimmed = newName.trim();
+        if(supplierData[trimmed]){ showToast('Nama supplier tersebut sudah dipakai.', 'error'); return; }
+        try{
+          await sbRenameSupplier(s, trimmed);
+          supplierData[trimmed] = supplierData[s];
+          delete supplierData[s];
+          renderSupplierOptions();
+          renderSupplierManageList();
+          showToast('Nama supplier diperbarui.', 'success');
+        }catch(err){
+          showToast('Gagal mengubah nama: ' + err.message, 'error');
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-del-supplier]').forEach(btn=>{
+      btn.addEventListener('click', async function(){
+        const s = decodeURIComponent(this.getAttribute('data-del-supplier'));
+        if(!confirm(`Hapus supplier "${s}" beserta seluruh barangnya?`)) return;
+        try{
+          await sbDeleteSupplierAll(s);
+          delete supplierData[s];
+          updateSupplierCounts();
+          renderSupplierOptions();
+          renderSupplierManageList();
+          showToast('Supplier dihapus.', 'success');
+        }catch(err){
+          showToast('Gagal menghapus supplier: ' + err.message, 'error');
+        }
+      });
+    });
+  }
+
+  // ---------- RECORDS ----------
+  async function loadWindowedRecords(){
+    try{
+      records = await sbSelectRecordsWindowed(daysAgoISO(29));
+    }catch(err){
+      records = [];
+      showToast('Gagal memuat riwayat penerimaan: ' + err.message, 'error');
+    }
+  }
+
+  // ---------- FORM VALIDATION & SUBMIT ----------
+  function setFieldError(id, hasError){ const f = el(id); if(f) f.classList.toggle('invalid', hasError); }
+  function clearFieldError(id){ setFieldError(id, false); }
+
+  function validateForm(){
+    let valid = true;
+    const checks = [
+      ['f_tanggal', el('tanggal').value.trim() !== ''],
+      ['f_noSJ', el('noSJ').value.trim() !== ''],
+      ['f_supplier', el('supplier').value.trim() !== ''],
+      ['f_barang', el('barang').value.trim() !== ''],
+      ['f_qty', el('qty').value !== '' && parseFloat(el('qty').value) > 0],
+      ['f_kemasan', el('kemasan').value.trim() !== ''],
+      ['f_po', el('noPO').value.trim() !== '']
+    ];
+    checks.forEach(([id, ok])=>{ setFieldError(id, !ok); if(!ok) valid = false; });
+    return valid;
+  }
+
+  function setSaveStatus(state, msg){
+    const s = el('saveStatus');
+    s.className = state || '';
+    s.textContent = msg || '';
+  }
+
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    if(!validateForm()){ showToast('Lengkapi kolom yang wajib diisi.', 'error'); return; }
+
+    const payload = {
+      tanggal: el('tanggal').value,
+      no_sj: el('noSJ').value.trim(),
+      supplier: el('supplier').value,
+      barang: el('barang').value,
+      qty: parseFloat(el('qty').value),
+      kemasan: el('kemasan').value,
+      no_po: el('noPO').value.trim(),
+      no_pol: el('noPol').value.trim(),
+      sopir: el('sopir').value.trim(),
+      recorded_by: currentUser ? currentUser.name : '-'
+    };
+
+    el('submitBtn').disabled = true;
+    setSaveStatus('pending', 'Menyimpan...');
+    try{
+      const inserted = await sbInsertRecord(payload);
+      const row = (inserted && inserted[0]) || payload;
+      if(row.tanggal >= daysAgoISO(29)){ records.unshift(row); }
+      setSaveStatus('ok', 'Tersimpan.');
+      renderHistory();
+      const keepSupplier = payload.supplier;
+      form.reset();
+      el('tanggal').value = todayISO();
+      supplierSelect.value = keepSupplier;
+      renderBarangOptions(keepSupplier);
+      ['f_tanggal','f_noSJ','f_supplier','f_barang','f_qty','f_kemasan','f_po'].forEach(clearFieldError);
+      showToast('Penerimaan berhasil disimpan.', 'success');
+      setTimeout(()=> setSaveStatus('',''), 4000);
+    }catch(err){
+      setSaveStatus('fail', 'Gagal disimpan, cek koneksi.');
+      showToast('Gagal menyimpan: ' + err.message + ' — data di form tidak hilang, silakan coba lagi.', 'error');
+    }
+    el('submitBtn').disabled = false;
+  });
+
+  form.addEventListener('reset', function(){
+    setTimeout(()=>{
+      el('tanggal').value = todayISO();
+      renderBarangOptions('');
+      ['f_tanggal','f_noSJ','f_supplier','f_barang','f_qty','f_kemasan','f_po'].forEach(clearFieldError);
+    }, 0);
+  });
+
+  // ---------- FILTER (dalam 30 hari) ----------
+  function getFilteredRecords(){
+    if(!filterFrom && !filterTo) return records;
+    return records.filter(r=>{
+      if(filterFrom && r.tanggal < filterFrom) return false;
+      if(filterTo && r.tanggal > filterTo) return false;
+      return true;
+    });
+  }
+
+  function updateFilterSummary(list){
+    const summary = el('filterSummary');
+    if(!filterFrom && !filterTo){
+      summary.innerHTML = `Menampilkan <b>30 hari terakhir</b> (${list.length} baris).`;
+    } else {
+      const fromLabel = filterFrom ? fmtDate(filterFrom) : fmtDate(daysAgoISO(29));
+      const toLabel = filterTo ? fmtDate(filterTo) : fmtDate(todayISO());
+      summary.innerHTML = `Menampilkan <b>${list.length}</b> baris dari <b>${fromLabel}</b> sampai <b>${toLabel}</b>.`;
+    }
+  }
+
+  el('applyFilterBtn').addEventListener('click', function(){
+    filterFrom = el('filterFrom').value || '';
+    filterTo = el('filterTo').value || '';
+    if(filterFrom && filterTo && filterFrom > filterTo){
+      showToast('Tanggal "dari" tidak boleh lebih besar dari tanggal "sampai".', 'error');
+      return;
+    }
+    renderHistory();
+  });
+
+  el('refreshBtn').addEventListener('click', async function(){
+    this.disabled = true;
+    this.textContent = 'Memuat...';
+    await loadWindowedRecords();
+    renderHistory();
+    this.disabled = false;
+    this.textContent = 'Muat Ulang';
+  });
+
+  // ---------- HISTORY TABLE ----------
+  function renderHistory(){
+    const body = el('historyBody');
+    const list = getFilteredRecords();
+    updateFilterSummary(list);
+    if(list.length === 0){
+      body.innerHTML = '<tr class="empty-row"><td colspan="12">Tidak ada data penerimaan pada rentang ini.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map((r, idx)=>`
+      <tr>
+        <td class="row-no">${idx+1}</td>
+        <td class="mono">${fmtDate(r.tanggal)}</td>
+        <td class="mono">${escapeHtml(r.no_sj)}</td>
+        <td>${escapeHtml(r.supplier)}</td>
+        <td>${escapeHtml(r.barang)}</td>
+        <td class="mono">${r.qty}</td>
+        <td>${escapeHtml(r.kemasan)}</td>
+        <td class="mono">${escapeHtml(r.no_po)}</td>
+        <td class="mono">${escapeHtml(r.no_pol || '-')}</td>
+        <td>${escapeHtml(r.sopir || '-')}</td>
+        <td>${escapeHtml(r.recorded_by || '-')}</td>
+        <td class="admin-only"><button type="button" class="ghost" data-del="${r.id}" title="Hapus">✕</button></td>
+      </tr>
+    `).join('');
+
+    body.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', async function(){
+        const id = this.getAttribute('data-del');
+        if(!confirm('Hapus baris penerimaan ini?')) return;
+        try{
+          await sbDeleteRecord(id);
+          records = records.filter(r => String(r.id) !== String(id));
+          renderHistory();
+        }catch(err){
+          showToast('Gagal menghapus: ' + err.message, 'error');
+        }
+      });
+    });
+  }
+
+  function buildExportSheet(list, sheetName, filename){
+    if(!list || list.length === 0){
+      showToast('Tidak ada data pada rentang ini untuk diekspor.', 'error');
+      return;
+    }
+    const wsData = [
+      ['Tanggal','No. SJ','Nama Suplier','Nama Barang','Quantity (kg)','Kemasan','No. PO','No. Pol','Sopir','Dicatat oleh']
+    ];
+    list.slice().reverse().forEach(r=>{
+      wsData.push([fmtDate(r.tanggal), r.no_sj, r.supplier, r.barang, r.qty, r.kemasan, r.no_po, r.no_pol||'', r.sopir||'', r.recorded_by||'']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+  }
+
+  el('exportBtn').addEventListener('click', function(){
+    const list = getFilteredRecords();
+    let filename = 'riwayat-penerimaan';
+    filename += (filterFrom || filterTo)
+      ? `-${filterFrom || daysAgoISO(29)}_sd_${filterTo || todayISO()}`
+      : `-30hari-${todayISO()}`;
+    buildExportSheet(list, 'Riwayat Penerimaan', `${filename}.xlsx`);
+  });
+
+  el('exportMonthBtn').addEventListener('click', async function(){
+    const month = el('monthPicker').value; // YYYY-MM
+    if(!month){ showToast('Pilih bulan terlebih dahulu.', 'error'); return; }
+    const [y, m] = month.split('-').map(Number);
+    const start = `${month}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${month}-${String(lastDay).padStart(2,'0')}`;
+    this.disabled = true;
+    this.textContent = 'Memuat...';
+    try{
+      const list = await sbSelectRecordsByRange(start, end);
+      buildExportSheet(list, `Penerimaan ${month}`, `riwayat-penerimaan-${month}.xlsx`);
+    }catch(err){
+      showToast('Gagal mengambil data bulan ini: ' + err.message, 'error');
+    }
+    this.disabled = false;
+    this.textContent = 'Ekspor ke File Excel (Bulan Ini)';
+  });
+
+})();
+</script>
+</body>
+</html>
