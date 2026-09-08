@@ -32,7 +32,25 @@
 
   body[data-role="gudang"] .admin-only,
   body[data-role="kantor"] .admin-only{ display:none !important; }
+  body[data-role="gudang"] .editor-only{ display:none !important; }
   body:not([data-role]) .app-content{ display:none; }
+
+  #editModal{
+    position:fixed; inset:0; background:rgba(32,48,44,0.55);
+    display:none; align-items:center; justify-content:center; padding:16px; z-index:90;
+  }
+  #editModal.show{ display:flex; }
+  .edit-card{
+    background:var(--panel); border-radius:var(--radius); padding:26px;
+    width:100%; max-width:560px; max-height:90vh; overflow-y:auto;
+  }
+  .edit-card h2{ font-size:16px; margin:0 0 16px; }
+  #editForm{ display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; }
+  #editForm .field.full{ grid-column:1 / -1; }
+  .edit-actions{
+    grid-column:1 / -1; display:flex; justify-content:flex-end; gap:10px;
+    margin-top:6px; padding-top:14px; border-top:1px solid var(--line);
+  }
 
   #loginScreen{
     position:fixed; inset:0; background:var(--ink);
@@ -346,11 +364,11 @@
           <tr>
             <th>No</th><th>Tanggal</th><th>No. SJ</th><th>Supplier</th><th>Barang</th>
             <th>Qty (kg)</th><th>Kemasan</th><th>No. PO</th><th>No. Pol</th><th>Sopir</th>
-            <th>Dicatat oleh</th><th class="admin-only"></th>
+            <th>Dicatat oleh</th><th>Diubah oleh</th><th></th>
           </tr>
         </thead>
         <tbody id="historyBody">
-          <tr class="empty-row"><td colspan="12">Memuat data...</td></tr>
+          <tr class="empty-row"><td colspan="13">Memuat data...</td></tr>
         </tbody>
       </table>
     </div>
@@ -380,6 +398,66 @@
   </section>
 
   <footer class="note">Data tersimpan di database bersama — dapat diakses Bela, Sandra, Dedi, Dewi, Gita, dan Keke.</footer>
+</div>
+
+<div id="editModal">
+  <div class="edit-card">
+    <h2>Ubah Data Penerimaan</h2>
+    <form id="editForm" novalidate>
+      <input type="hidden" id="editId">
+      <div class="field" id="ef_tanggal">
+        <label for="editTanggal">Tanggal</label>
+        <input type="date" id="editTanggal" required>
+        <small class="err">Tanggal wajib diisi</small>
+      </div>
+      <div class="field" id="ef_noSJ">
+        <label for="editNoSJ">No. SJ</label>
+        <input type="text" id="editNoSJ" required>
+        <small class="err">No. SJ wajib diisi</small>
+      </div>
+      <div class="field" id="ef_supplier">
+        <label for="editSupplier">Nama Supplier</label>
+        <select id="editSupplier" required></select>
+        <small class="err">Pilih supplier</small>
+      </div>
+      <div class="field" id="ef_barang">
+        <label for="editBarang">Nama Barang</label>
+        <select id="editBarang" required></select>
+        <small class="err">Pilih barang</small>
+      </div>
+      <div class="field" id="ef_qty">
+        <label for="editQty">Quantity (kg)</label>
+        <input type="number" id="editQty" min="0" step="0.01" required>
+        <small class="err">Isi quantity yang valid</small>
+      </div>
+      <div class="field" id="ef_kemasan">
+        <label for="editKemasan">Kemasan</label>
+        <select id="editKemasan" required>
+          <option value="">— pilih —</option>
+          <option value="Sak">Sak</option>
+          <option value="Jumbo">Jumbo</option>
+        </select>
+        <small class="err">Pilih jenis kemasan</small>
+      </div>
+      <div class="field" id="ef_po">
+        <label for="editNoPO">No. PO</label>
+        <input type="text" id="editNoPO" required>
+        <small class="err">No. PO wajib diisi</small>
+      </div>
+      <div class="field">
+        <label for="editNoPol">No. Polisi <span class="opt-tag">opsional</span></label>
+        <input type="text" id="editNoPol">
+      </div>
+      <div class="field">
+        <label for="editSopir">Sopir <span class="opt-tag">opsional</span></label>
+        <input type="text" id="editSopir">
+      </div>
+      <div class="edit-actions">
+        <button type="button" id="editCancelBtn">Batal</button>
+        <button type="submit" class="primary" id="editSaveBtn">Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -605,7 +683,7 @@
     el('monthPicker').value = todayISO().slice(0,7);
 
     el('filterSummary').textContent = 'Memuat data...';
-    el('historyBody').innerHTML = '<tr class="empty-row"><td colspan="12">Memuat data...</td></tr>';
+    el('historyBody').innerHTML = '<tr class="empty-row"><td colspan="13">Memuat data...</td></tr>';
 
     await loadSupplierData();
     await loadWindowedRecords();
@@ -965,7 +1043,7 @@
     const list = getFilteredRecords();
     updateFilterSummary(list);
     if(list.length === 0){
-      body.innerHTML = '<tr class="empty-row"><td colspan="12">Tidak ada data penerimaan pada rentang ini.</td></tr>';
+      body.innerHTML = '<tr class="empty-row"><td colspan="13">Tidak ada data penerimaan pada rentang ini.</td></tr>';
       return;
     }
     body.innerHTML = list.map((r, idx)=>`
@@ -981,7 +1059,11 @@
         <td class="mono">${escapeHtml(r.no_pol || '-')}</td>
         <td>${escapeHtml(r.sopir || '-')}</td>
         <td>${escapeHtml(r.recorded_by || '-')}</td>
-        <td class="admin-only"><button type="button" class="ghost" data-del="${r.id}" title="Hapus">✕</button></td>
+        <td class="mono" style="font-size:11.5px;">${r.edited_by ? escapeHtml(r.edited_by) + ' · ' + fmtDateTime(r.edited_at) : '-'}</td>
+        <td>
+          <button type="button" class="ghost editor-only" data-edit="${r.id}" title="Ubah">✎</button>
+          <button type="button" class="ghost admin-only" data-del="${r.id}" title="Hapus">✕</button>
+        </td>
       </tr>
     `).join('');
 
@@ -998,7 +1080,128 @@
         }
       });
     });
+
+    body.querySelectorAll('[data-edit]').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        const id = this.getAttribute('data-edit');
+        const rec = records.find(r => String(r.id) === String(id));
+        if(rec) openEditModal(rec);
+      });
+    });
   }
+
+  function fmtDateTime(iso){
+    if(!iso) return '-';
+    const d = new Date(iso);
+    if(isNaN(d)) return iso;
+    return d.toLocaleString('id-ID', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  // ---------- EDIT MODAL ----------
+  function fillEditSupplierOptions(selectedSupplier){
+    const sel = el('editSupplier');
+    sel.innerHTML = '<option value="">— pilih supplier —</option>';
+    Object.keys(supplierData).sort((a,b)=>a.localeCompare(b)).forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+    sel.value = selectedSupplier || '';
+  }
+  function fillEditBarangOptions(supplierName, selectedItem){
+    const sel = el('editBarang');
+    sel.innerHTML = '';
+    const items = supplierData[supplierName] || [];
+    if(!supplierName || items.length === 0){
+      sel.innerHTML = '<option value="">— tidak ada barang —</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— pilih barang —</option>';
+    items.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(it=>{
+      const opt = document.createElement('option');
+      opt.value = it.name; opt.textContent = it.name;
+      sel.appendChild(opt);
+    });
+    if(selectedItem && !items.some(it=>it.name===selectedItem)){
+      const opt = document.createElement('option');
+      opt.value = selectedItem; opt.textContent = selectedItem + ' (tidak ada di daftar saat ini)';
+      sel.appendChild(opt);
+    }
+    sel.value = selectedItem || '';
+  }
+  el('editSupplier').addEventListener('change', function(){
+    fillEditBarangOptions(this.value, '');
+  });
+
+  function openEditModal(rec){
+    el('editId').value = rec.id;
+    el('editTanggal').value = rec.tanggal;
+    el('editNoSJ').value = rec.no_sj;
+    fillEditSupplierOptions(rec.supplier);
+    fillEditBarangOptions(rec.supplier, rec.barang);
+    el('editQty').value = rec.qty;
+    el('editKemasan').value = rec.kemasan;
+    el('editNoPO').value = rec.no_po;
+    el('editNoPol').value = rec.no_pol || '';
+    el('editSopir').value = rec.sopir || '';
+    ['ef_tanggal','ef_noSJ','ef_supplier','ef_barang','ef_qty','ef_kemasan','ef_po'].forEach(id=>{
+      const f = el(id); if(f) f.classList.remove('invalid');
+    });
+    el('editModal').classList.add('show');
+  }
+  function closeEditModal(){
+    el('editModal').classList.remove('show');
+  }
+  el('editCancelBtn').addEventListener('click', closeEditModal);
+  el('editModal').addEventListener('click', function(e){
+    if(e.target === this) closeEditModal();
+  });
+
+  el('editForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const checks = [
+      ['ef_tanggal', el('editTanggal').value.trim() !== ''],
+      ['ef_noSJ', el('editNoSJ').value.trim() !== ''],
+      ['ef_supplier', el('editSupplier').value.trim() !== ''],
+      ['ef_barang', el('editBarang').value.trim() !== ''],
+      ['ef_qty', el('editQty').value !== '' && parseFloat(el('editQty').value) > 0],
+      ['ef_kemasan', el('editKemasan').value.trim() !== ''],
+      ['ef_po', el('editNoPO').value.trim() !== '']
+    ];
+    let valid = true;
+    checks.forEach(([id, ok])=>{ const f = el(id); if(f) f.classList.toggle('invalid', !ok); if(!ok) valid = false; });
+    if(!valid){ showToast('Lengkapi kolom yang wajib diisi.', 'error'); return; }
+
+    const id = el('editId').value;
+    const patch = {
+      tanggal: el('editTanggal').value,
+      no_sj: el('editNoSJ').value.trim(),
+      supplier: el('editSupplier').value,
+      barang: el('editBarang').value,
+      qty: parseFloat(el('editQty').value),
+      kemasan: el('editKemasan').value,
+      no_po: el('editNoPO').value.trim(),
+      no_pol: el('editNoPol').value.trim(),
+      sopir: el('editSopir').value.trim(),
+      edited_by: currentUser ? currentUser.name : '-',
+      edited_at: new Date().toISOString()
+    };
+
+    el('editSaveBtn').disabled = true;
+    el('editSaveBtn').textContent = 'Menyimpan...';
+    try{
+      await sb('receiving_records?id=eq.' + encodeURIComponent(id), { method:'PATCH', body: JSON.stringify(patch) });
+      const idx = records.findIndex(r => String(r.id) === String(id));
+      if(idx > -1) records[idx] = Object.assign({}, records[idx], patch);
+      renderHistory();
+      closeEditModal();
+      showToast('Perubahan berhasil disimpan.', 'success');
+    }catch(err){
+      showToast('Gagal menyimpan perubahan: ' + err.message, 'error');
+    }
+    el('editSaveBtn').disabled = false;
+    el('editSaveBtn').textContent = 'Simpan Perubahan';
+  });
 
   function buildExportSheet(list, sheetName, filename){
     if(!list || list.length === 0){
@@ -1006,10 +1209,10 @@
       return;
     }
     const wsData = [
-      ['Tanggal','No. SJ','Nama Suplier','Nama Barang','Quantity (kg)','Kemasan','No. PO','No. Pol','Sopir','Dicatat oleh']
+      ['Tanggal','No. SJ','Nama Suplier','Nama Barang','Quantity (kg)','Kemasan','No. PO','No. Pol','Sopir','Dicatat oleh','Diubah oleh','Waktu Diubah']
     ];
     list.slice().reverse().forEach(r=>{
-      wsData.push([fmtDate(r.tanggal), r.no_sj, r.supplier, r.barang, r.qty, r.kemasan, r.no_po, r.no_pol||'', r.sopir||'', r.recorded_by||'']);
+      wsData.push([fmtDate(r.tanggal), r.no_sj, r.supplier, r.barang, r.qty, r.kemasan, r.no_po, r.no_pol||'', r.sopir||'', r.recorded_by||'', r.edited_by||'', r.edited_by ? fmtDateTime(r.edited_at) : '']);
     });
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
