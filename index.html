@@ -351,6 +351,18 @@
         <label for="filterTo">Sampai tanggal</label>
         <input type="date" id="filterTo">
       </div>
+      <div class="field">
+        <label for="filterSupplier">Filter Supplier</label>
+        <select id="filterSupplier">
+          <option value="">— semua supplier —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="filterBarang">Filter Barang</label>
+        <select id="filterBarang">
+          <option value="">— semua barang —</option>
+        </select>
+      </div>
       <button type="button" id="applyFilterBtn">Tampilkan</button>
       <button type="button" id="refreshBtn">Muat Ulang</button>
       <button type="button" class="primary" id="exportBtn" style="margin-left:auto;">Ekspor ke File Excel (Tampilan Ini)</button>
@@ -573,6 +585,8 @@
   let records = [];        // windowed (30 hari) records from DB, snake_case fields
   let filterFrom = '';
   let filterTo = '';
+  let filterSupplierVal = '';
+  let filterBarangVal = '';
 
   const el = (id) => document.getElementById(id);
   const supplierSelect = el('supplier');
@@ -813,7 +827,46 @@
     });
     if(prevPicker) picker.value = prevPicker;
     toggleNewSupplierField();
+
+    const fSupplier = el('filterSupplier');
+    const prevF = fSupplier.value;
+    fSupplier.innerHTML = '<option value="">— semua supplier —</option>';
+    Object.keys(supplierData).sort((a,b)=>a.localeCompare(b)).forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      fSupplier.appendChild(opt);
+    });
+    if(Object.keys(supplierData).includes(prevF)) fSupplier.value = prevF;
+    renderFilterBarangOptions(fSupplier.value);
   }
+
+  function renderFilterBarangOptions(supplierName){
+    const fBarang = el('filterBarang');
+    const prevVal = fBarang.value;
+    fBarang.innerHTML = '<option value="">— semua barang —</option>';
+    const items = supplierName ? (supplierData[supplierName] || []) : [];
+    if(supplierName){
+      items.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(it=>{
+        const opt = document.createElement('option');
+        opt.value = it.name; opt.textContent = it.name;
+        fBarang.appendChild(opt);
+      });
+    } else {
+      // tanpa supplier terpilih: gabungkan semua barang dari semua supplier (unik)
+      const allItems = new Set();
+      Object.values(supplierData).forEach(arr => arr.forEach(it => allItems.add(it.name)));
+      Array.from(allItems).sort((a,b)=>a.localeCompare(b)).forEach(name=>{
+        const opt = document.createElement('option');
+        opt.value = name; opt.textContent = name;
+        fBarang.appendChild(opt);
+      });
+    }
+    if(Array.from(fBarang.options).some(o=>o.value === prevVal)) fBarang.value = prevVal;
+  }
+
+  el('filterSupplier').addEventListener('change', function(){
+    renderFilterBarangOptions(this.value);
+  });
 
   function renderBarangOptions(supplierName){
     barangSelect.innerHTML = '';
@@ -1058,28 +1111,35 @@
 
   // ---------- FILTER (dalam 30 hari) ----------
   function getFilteredRecords(){
-    if(!filterFrom && !filterTo) return records;
     return records.filter(r=>{
       if(filterFrom && r.tanggal < filterFrom) return false;
       if(filterTo && r.tanggal > filterTo) return false;
+      if(filterSupplierVal && r.supplier !== filterSupplierVal) return false;
+      if(filterBarangVal && r.barang !== filterBarangVal) return false;
       return true;
     });
   }
 
   function updateFilterSummary(list){
     const summary = el('filterSummary');
-    if(!filterFrom && !filterTo){
-      summary.innerHTML = `Menampilkan <b>30 hari terakhir</b> (${list.length} baris).`;
-    } else {
+    const parts = [];
+    if(filterFrom || filterTo){
       const fromLabel = filterFrom ? fmtDate(filterFrom) : fmtDate(daysAgoISO(29));
       const toLabel = filterTo ? fmtDate(filterTo) : fmtDate(todayISO());
-      summary.innerHTML = `Menampilkan <b>${list.length}</b> baris dari <b>${fromLabel}</b> sampai <b>${toLabel}</b>.`;
+      parts.push(`tanggal <b>${fromLabel}</b> s/d <b>${toLabel}</b>`);
+    } else {
+      parts.push('<b>30 hari terakhir</b>');
     }
+    if(filterSupplierVal) parts.push(`supplier <b>${escapeHtml(filterSupplierVal)}</b>`);
+    if(filterBarangVal) parts.push(`barang <b>${escapeHtml(filterBarangVal)}</b>`);
+    summary.innerHTML = `Menampilkan <b>${list.length}</b> baris — ${parts.join(', ')}.`;
   }
 
   el('applyFilterBtn').addEventListener('click', function(){
     filterFrom = el('filterFrom').value || '';
     filterTo = el('filterTo').value || '';
+    filterSupplierVal = el('filterSupplier').value || '';
+    filterBarangVal = el('filterBarang').value || '';
     if(filterFrom && filterTo && filterFrom > filterTo){
       showToast('Tanggal "dari" tidak boleh lebih besar dari tanggal "sampai".', 'error');
       return;
@@ -1289,6 +1349,9 @@
     filename += (filterFrom || filterTo)
       ? `-${filterFrom || daysAgoISO(29)}_sd_${filterTo || todayISO()}`
       : `-30hari-${todayISO()}`;
+    const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+    if(filterSupplierVal) filename += `-${slug(filterSupplierVal)}`;
+    if(filterBarangVal) filename += `-${slug(filterBarangVal)}`;
     buildExportSheet(list, 'Riwayat Penerimaan', `${filename}.xlsx`);
   });
 
