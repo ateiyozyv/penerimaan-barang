@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Formulir Penerimaan Barang</title>
+<title>Formulir Penerimaan Barang dan Hasil Produksi</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -209,7 +209,7 @@
 
 <div id="loginScreen">
   <div class="login-card">
-    <h1>Formulir Penerimaan Barang</h1>
+    <h1>Formulir Penerimaan Barang dan Hasil Produksi</h1>
     <p class="sub">Masukkan nama Anda untuk masuk.</p>
     <form id="loginForm">
       <label for="loginName">Nama</label>
@@ -224,7 +224,7 @@
 
   <header class="top">
     <div>
-      <h1>Formulir Penerimaan Barang</h1>
+      <h1>Formulir Penerimaan Barang dan Hasil Produksi</h1>
       <div class="sub">Pencatatan barang masuk gudang</div>
       <div class="clock"><span id="clockDate">-</span> · <span id="clockTime">--:--</span></div>
     </div>
@@ -493,6 +493,16 @@
         </select>
       </div>
 
+      <div class="field">
+        <label for="prodKodeBom">Kode BOM <span class="opt-tag">opsional</span></label>
+        <input type="text" id="prodKodeBom" placeholder="cth. BOM-2026-014">
+      </div>
+
+      <div class="field full">
+        <label for="prodKeterangan">Keterangan <span class="opt-tag">opsional</span></label>
+        <input type="text" id="prodKeterangan" placeholder="Catatan tambahan">
+      </div>
+
       <div class="form-actions">
         <span id="prodSaveStatus"></span>
         <button type="reset" id="prodResetBtn">Bersihkan</button>
@@ -533,11 +543,12 @@
         <thead>
           <tr>
             <th>No</th><th>Tanggal</th><th>Produk</th><th>Jumlah (kg)</th><th>No. Batch</th><th>Shift</th>
+            <th>Kode BOM</th><th>Keterangan</th>
             <th>Dicatat oleh</th><th>Diubah oleh</th><th></th>
           </tr>
         </thead>
         <tbody id="prodHistoryBody">
-          <tr class="empty-row"><td colspan="9">Memuat data...</td></tr>
+          <tr class="empty-row"><td colspan="11">Memuat data...</td></tr>
         </tbody>
       </table>
     </div>
@@ -561,9 +572,9 @@
     <div class="table-scroll" id="prodDelLogWrap" style="display:none;">
       <table>
         <thead>
-          <tr><th>Dihapus pada</th><th>Dihapus oleh</th><th>Tanggal</th><th>Produk</th><th>Jumlah</th><th>No. Batch</th><th>Shift</th><th>Dicatat oleh</th></tr>
+          <tr><th>Dihapus pada</th><th>Dihapus oleh</th><th>Tanggal</th><th>Produk</th><th>Jumlah</th><th>No. Batch</th><th>Shift</th><th>Kode BOM</th><th>Keterangan</th><th>Dicatat oleh</th></tr>
         </thead>
-        <tbody id="prodDelLogBody"><tr class="empty-row"><td colspan="8">Belum dimuat.</td></tr></tbody>
+        <tbody id="prodDelLogBody"><tr class="empty-row"><td colspan="10">Belum dimuat.</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -680,6 +691,14 @@
           <option value="Sore">Sore</option>
         </select>
       </div>
+      <div class="field">
+        <label for="editProdKodeBom">Kode BOM <span class="opt-tag">opsional</span></label>
+        <input type="text" id="editProdKodeBom">
+      </div>
+      <div class="field full">
+        <label for="editProdKeterangan">Keterangan <span class="opt-tag">opsional</span></label>
+        <input type="text" id="editProdKeterangan">
+      </div>
       <div class="edit-actions">
         <button type="button" id="editProdCancelBtn">Batal</button>
         <button type="submit" class="primary" id="editProdSaveBtn">Simpan Perubahan</button>
@@ -750,7 +769,7 @@
 
   const sbInsertProdDeleteLog = (row, deletedBy) => sb('deleted_production_log', { method:'POST', body: JSON.stringify([{
     original_id: row.id, tanggal: row.tanggal, product: row.product, qty: row.qty, batch: row.batch, shift: row.shift,
-    recorded_by: row.recorded_by, deleted_by: deletedBy
+    kode_bom: row.kode_bom, keterangan: row.keterangan, recorded_by: row.recorded_by, deleted_by: deletedBy
   }]) });
   const sbSelectProdDeleteLog = () => sb('deleted_production_log?select=*&order=deleted_at.desc&limit=200');
 
@@ -984,7 +1003,7 @@
     el('filterSummary').textContent = 'Memuat data...';
     el('historyBody').innerHTML = '<tr class="empty-row"><td colspan="13">Memuat data...</td></tr>';
     el('prodFilterSummary').textContent = 'Memuat data...';
-    el('prodHistoryBody').innerHTML = '<tr class="empty-row"><td colspan="9">Memuat data...</td></tr>';
+    el('prodHistoryBody').innerHTML = '<tr class="empty-row"><td colspan="11">Memuat data...</td></tr>';
 
     await loadSupplierData();
     await loadWindowedRecords();
@@ -1791,6 +1810,8 @@
       qty: parseFloat(el('prodQty').value),
       batch: el('prodBatch').value.trim(),
       shift: el('prodShift').value,
+      kode_bom: el('prodKodeBom').value.trim(),
+      keterangan: el('prodKeterangan').value.trim(),
       recorded_by: currentUser ? currentUser.name : '-'
     };
 
@@ -1873,7 +1894,7 @@
     const list = getFilteredProdRecords();
     updateProdFilterSummary(list);
     if(list.length === 0){
-      body.innerHTML = '<tr class="empty-row"><td colspan="9">Tidak ada data produksi pada rentang ini.</td></tr>';
+      body.innerHTML = '<tr class="empty-row"><td colspan="11">Tidak ada data produksi pada rentang ini.</td></tr>';
       return;
     }
     body.innerHTML = list.map((r, idx)=>`
@@ -1884,6 +1905,8 @@
         <td class="mono">${r.qty}</td>
         <td class="mono">${escapeHtml(r.batch || '-')}</td>
         <td>${escapeHtml(r.shift || '-')}</td>
+        <td class="mono">${escapeHtml(r.kode_bom || '-')}</td>
+        <td>${escapeHtml(r.keterangan || '-')}</td>
         <td>${escapeHtml(r.recorded_by || '-')}</td>
         <td class="mono" style="font-size:11.5px;">${r.edited_by ? escapeHtml(r.edited_by) + ' · ' + fmtDateTime(r.edited_at) : '-'}</td>
         <td>
@@ -1926,10 +1949,10 @@
       return;
     }
     const wsData = [
-      ['Tanggal','Nama Produk','Jumlah (kg)','No. Batch/Lot','Shift','Dicatat oleh','Diubah oleh','Waktu Diubah']
+      ['Tanggal','Nama Produk','Jumlah (kg)','No. Batch/Lot','Shift','Kode BOM','Keterangan','Dicatat oleh','Diubah oleh','Waktu Diubah']
     ];
     list.slice().reverse().forEach(r=>{
-      wsData.push([fmtDate(r.tanggal), r.product, r.qty, r.batch||'', r.shift||'', r.recorded_by||'', r.edited_by||'', r.edited_by ? fmtDateTime(r.edited_at) : '']);
+      wsData.push([fmtDate(r.tanggal), r.product, r.qty, r.batch||'', r.shift||'', r.kode_bom||'', r.keterangan||'', r.recorded_by||'', r.edited_by||'', r.edited_by ? fmtDateTime(r.edited_at) : '']);
     });
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -1993,6 +2016,8 @@
     el('editProdQty').value = rec.qty;
     el('editProdBatch').value = rec.batch || '';
     el('editProdShift').value = rec.shift || '';
+    el('editProdKodeBom').value = rec.kode_bom || '';
+    el('editProdKeterangan').value = rec.keterangan || '';
     ['epf_tanggal','epf_produk','epf_qty'].forEach(id=>{ const f = el(id); if(f) f.classList.remove('invalid'); });
     el('editModalProd').classList.add('show');
   }
@@ -2018,6 +2043,8 @@
       qty: parseFloat(el('editProdQty').value),
       batch: el('editProdBatch').value.trim(),
       shift: el('editProdShift').value,
+      kode_bom: el('editProdKodeBom').value.trim(),
+      keterangan: el('editProdKeterangan').value.trim(),
       edited_by: currentUser ? currentUser.name : '-',
       edited_at: new Date().toISOString()
     };
@@ -2053,6 +2080,8 @@
         <td class="mono">${l.qty != null ? l.qty : '-'}</td>
         <td class="mono">${escapeHtml(l.batch || '-')}</td>
         <td>${escapeHtml(l.shift || '-')}</td>
+        <td class="mono">${escapeHtml(l.kode_bom || '-')}</td>
+        <td>${escapeHtml(l.keterangan || '-')}</td>
         <td>${escapeHtml(l.recorded_by || '-')}</td>
       </tr>`).join('');
   }
